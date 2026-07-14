@@ -8,7 +8,7 @@ The application connects to this upstream WebSocket:
 wss://socket.qmusic.be/api/502/ltfn4msd/websocket
 ```
 
-The listener subscribes to the station:
+The listener subscribes to stations on demand. The default station is:
 
 ```text
 joe_nl
@@ -20,7 +20,7 @@ Incoming play events are parsed, normalized and stored in memory. The API can th
 
 1. Starts a background listener when the FastAPI app starts.
 2. Connects to the upstream JOE WebSocket.
-3. Sends a subscription message for `joe_nl` play events.
+3. Sends a subscription message for the requested station play events.
 4. Parses incoming SockJS frames.
 5. Extracts track data from the received payloads.
 6. Stores the latest 50 tracks in memory.
@@ -108,8 +108,8 @@ uvicorn app.joe_api:app --host 127.0.0.1 --port 8000 --workers 1
 The listener status and playlist are stored in process memory:
 
 ```python
-latest_tracks = []
-listener_status = {}
+latest_tracks_by_station = {}
+listener_status_by_station = {}
 ```
 
 Because of that, run the application with one worker:
@@ -136,6 +136,41 @@ Example:
 curl http://127.0.0.1:8000/
 ```
 
+### Stations
+
+```http
+GET /stations
+```
+
+Returns the default station, known station ids and station listeners that have been started.
+
+Example:
+
+```bash
+curl http://127.0.0.1:8000/stations
+```
+
+Example response shape:
+
+```json
+{
+  "default_station": "joe_nl",
+  "stations": [
+    {
+      "id": "joe_nl",
+      "name": "JOE NL"
+    },
+    {
+      "id": "qmusic_nl",
+      "name": "Qmusic NL"
+    }
+  ],
+  "active_stations": [
+    "joe_nl"
+  ]
+}
+```
+
 ### Status
 
 ```http
@@ -143,11 +178,13 @@ GET /status
 ```
 
 Returns the current listener status and the number of tracks currently stored in memory.
+Use the optional `station` query parameter to request another station. If omitted, `joe_nl` is used.
 
 Example:
 
 ```bash
 curl http://127.0.0.1:8000/status
+curl "http://127.0.0.1:8000/status?station=qmusic_nl"
 ```
 
 Example response shape:
@@ -172,11 +209,13 @@ GET /playlist
 ```
 
 Returns the latest tracks stored in memory.
+Use the optional `station` query parameter to request another station. If omitted, `joe_nl` is used.
 
 Example:
 
 ```bash
 curl http://127.0.0.1:8000/playlist
+curl "http://127.0.0.1:8000/playlist?station=qmusic_nl"
 ```
 
 Example response shape:
@@ -196,11 +235,13 @@ GET /now-playing
 ```
 
 Returns the most recent track, or `null` if no track has been received yet.
+Use the optional `station` query parameter to request another station. If omitted, `joe_nl` is used.
 
 Example:
 
 ```bash
 curl http://127.0.0.1:8000/now-playing
+curl "http://127.0.0.1:8000/now-playing?station=qmusic_nl"
 ```
 
 Example response shape:
@@ -250,7 +291,8 @@ When the app starts, it starts a background thread through the FastAPI lifespan 
 The listener:
 
 - connects to the upstream WebSocket;
-- sends a subscription message for JOE play events;
+- sends a subscription message for station play events;
+- starts `joe_nl` by default and starts other station listeners when they are requested;
 - marks itself as connected when the WebSocket opens;
 - updates `last_message_at` when a message is received;
 - stores parsing errors in `last_error`;
@@ -275,7 +317,7 @@ Each stored track contains:
 The application keeps a maximum of 50 tracks:
 
 ```python
-del latest_tracks[50:]
+del latest_tracks_by_station[station][50:]
 ```
 
 Simple duplicates are ignored when the previous track has the same:
