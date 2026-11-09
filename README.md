@@ -14,6 +14,8 @@ The listener subscribes to stations on demand. The default station is:
 joe_nl
 ```
 
+Only known stations (`joe_nl`, `qmusic_nl`) can start a listener; other ids return `404`. To allow more stations, set `JOE_EXTRA_STATIONS` to a comma separated list of ids, e.g. `JOE_EXTRA_STATIONS=joe_be,qmusic_be`.
+
 Incoming play events are parsed, normalized and stored in memory. The API can then return the current listener status, the in-memory playlist and the most recent track.
 
 ## What the application does
