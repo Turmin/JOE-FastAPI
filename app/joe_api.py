@@ -1,6 +1,7 @@
 # app/joe_api.py
 
 import json
+import os
 import re
 import threading
 import time
@@ -19,6 +20,15 @@ STATIONS = [
     {"id": "joe_nl", "name": "JOE NL"},
     {"id": "qmusic_nl", "name": "Qmusic NL"},
 ]
+
+# Every station gets its own background thread and WebSocket connection, so
+# only known stations may start a listener. Add more ids (comma separated)
+# with the JOE_EXTRA_STATIONS environment variable.
+ALLOWED_STATIONS = {item["id"] for item in STATIONS} | {
+    item.strip().lower()
+    for item in os.getenv("JOE_EXTRA_STATIONS", "").split(",")
+    if STATION_PATTERN.fullmatch(item.strip().lower())
+}
 
 latest_tracks_by_station: dict[str, list[dict[str, Any]]] = {}
 listener_status_by_station: dict[str, dict[str, Any]] = {}
@@ -46,6 +56,9 @@ def normalize_station(station: str | None) -> str:
             status_code=400,
             detail="Station may only contain lowercase letters, numbers, underscores and hyphens.",
         )
+
+    if station not in ALLOWED_STATIONS:
+        raise HTTPException(status_code=404, detail="Unknown station.")
 
     return station
 
